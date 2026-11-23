@@ -1,0 +1,174 @@
+{
+  "entities": {
+    "Reminder": {
+      "title": "Reminder",
+      "description": "User-owned medicine reminder with dosage, meal timing, course duration, family profile, pill inventory, refill alerts, full-screen urgent alarm, geofencing, and dose adherence counts",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "profileId": { "type": "string", "description": "Family member profile ID (default self)" },
+        "profileName": { "type": "string", "description": "Family member display name" },
+        "title": { "type": "string", "description": "Medicine name (1-120 chars)" },
+        "notes": { "type": "string", "description": "Special instructions or prescription notes (0-500 chars)" },
+        "dueAtMillis": { "type": "integer" },
+        "snoozedUntilMillis": { "type": "integer" },
+        "leadTimeMinutes": { "type": "integer", "enum": [0, 5, 15, 30, 60] },
+        "priority": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH", "URGENT"] },
+        "category": {
+          "type": "string",
+          "enum": ["DAILY_MEDS", "VITAMINS", "HEART_BP", "DIABETES", "ANTIBIOTIC", "EYES_SKIN", "PERSONAL", "WORK", "HEALTH", "FINANCE", "ERRANDS", "STUDY"]
+        },
+        "recurrence": {
+          "type": "string",
+          "enum": ["NONE", "EVERY_8_HOURS", "EVERY_12_HOURS", "DAILY", "WEEKDAYS", "WEEKLY", "MONTHLY", "YEARLY"]
+        },
+        "completed": { "type": "boolean" },
+        "pinned": { "type": "boolean" },
+        "urgentAlarm": { "type": "boolean" },
+        "locationLabel": { "type": "string" },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "radiusMeters": { "type": "integer" },
+        "locationTriggerEnabled": { "type": "boolean" },
+        "dosage": { "type": "string", "description": "Dose strength/amount e.g. 500 mg, 1 Tablet" },
+        "medForm": { "type": "string", "enum": ["TABLET", "CAPSULE", "SYRUP", "INJECTION", "DROPS", "INHALER", "OTHER"] },
+        "mealInstruction": { "type": "string", "enum": ["BEFORE_FOOD", "AFTER_FOOD", "WITH_FOOD", "EMPTY_STOMACH", "ANYTIME"] },
+        "prescribedBy": { "type": "string", "description": "Doctor or clinic name" },
+        "stockCount": { "type": "integer", "description": "Remaining pills/doses (-1 if untracked)" },
+        "dosePerIntake": { "type": "integer", "description": "Units consumed per intake (1-100)" },
+        "refillThreshold": { "type": "integer", "description": "Low-stock alert threshold (0-500)" },
+        "takenCount": { "type": "integer", "description": "Total doses marked taken" },
+        "skippedCount": { "type": "integer", "description": "Total doses skipped" },
+        "lastDoseStatus": { "type": "string", "enum": ["PENDING", "TAKEN", "SKIPPED"] },
+        "courseDays": { "type": "integer", "description": "Course length in days (0 if ongoing)" },
+        "courseStartMillis": { "type": "integer", "description": "Course start epoch millis" },
+        "subtasks": { "type": "array" },
+        "completedAtMillis": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "title", "notes", "dueAtMillis", "snoozedUntilMillis",
+        "leadTimeMinutes", "priority", "category", "recurrence",
+        "completed", "pinned", "subtasks", "completedAtMillis",
+        "createdAt", "updatedAt"
+      ]
+    },
+    "SharedReminder": {
+      "title": "SharedReminder",
+      "description": "Caregiver-shared medicine reminder synced across family and caregivers by verified Google email",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string" },
+        "ownerEmail": { "type": "string" },
+        "participantEmails": { "type": "array" },
+        "title": { "type": "string" },
+        "notes": { "type": "string" },
+        "dueAtMillis": { "type": "integer" },
+        "snoozedUntilMillis": { "type": "integer" },
+        "leadTimeMinutes": { "type": "integer" },
+        "priority": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH", "URGENT"] },
+        "category": { "type": "string" },
+        "recurrence": { "type": "string" },
+        "completed": { "type": "boolean" },
+        "pinned": { "type": "boolean" },
+        "dosage": { "type": "string" },
+        "medForm": { "type": "string" },
+        "mealInstruction": { "type": "string" },
+        "prescribedBy": { "type": "string" },
+        "stockCount": { "type": "integer" },
+        "dosePerIntake": { "type": "integer" },
+        "refillThreshold": { "type": "integer" },
+        "takenCount": { "type": "integer" },
+        "skippedCount": { "type": "integer" },
+        "lastDoseStatus": { "type": "string" },
+        "subtasks": { "type": "array" },
+        "completedAtMillis": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "ownerId", "ownerEmail", "participantEmails",
+        "title", "notes", "dueAtMillis", "snoozedUntilMillis",
+        "leadTimeMinutes", "priority", "category", "recurrence",
+        "completed", "pinned", "subtasks", "completedAtMillis",
+        "createdAt", "updatedAt"
+      ]
+    },
+    "FamilyProfile": {
+      "title": "FamilyProfile",
+      "description": "Family member profile for managing separate medicine schedules, vitals, and emergency/doctor numbers",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "relation": { "type": "string" },
+        "doctorName": { "type": "string" },
+        "doctorPhone": { "type": "string" },
+        "emergencyPhone": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name", "relation", "createdAt", "updatedAt"]
+    },
+    "VitalRecord": {
+      "title": "VitalRecord",
+      "description": "Health vital reading (BP, Sugar Fasting/PP, SpO2, Temperature, Weight) per family profile",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "profileId": { "type": "string" },
+        "type": { "type": "string", "enum": ["BP", "SUGAR_FASTING", "SUGAR_PP", "SPO2", "TEMPERATURE", "WEIGHT"] },
+        "valuePrimary": { "type": "number" },
+        "valueSecondary": { "type": "number" },
+        "unit": { "type": "string" },
+        "notes": { "type": "string" },
+        "recordedAtMillis": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "profileId", "type", "valuePrimary", "valueSecondary", "unit", "recordedAtMillis", "createdAt", "updatedAt"]
+    },
+    "DoctorAppointment": {
+      "title": "DoctorAppointment",
+      "description": "Scheduled doctor visit or lab checkup reminder with clinic contact",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "profileId": { "type": "string" },
+        "doctorName": { "type": "string" },
+        "specialty": { "type": "string" },
+        "clinicName": { "type": "string" },
+        "clinicPhone": { "type": "string" },
+        "appointmentAtMillis": { "type": "integer" },
+        "notes": { "type": "string" },
+        "completed": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "profileId", "doctorName", "appointmentAtMillis", "completed", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/reminders/{reminderId}": {
+      "schema": { "$ref": "#/entities/Reminder" },
+      "description": "Per-user medicine reminders isolated by Firebase Auth UID"
+    },
+    "/users/{userId}/family_profiles/{profileId}": {
+      "schema": { "$ref": "#/entities/FamilyProfile" },
+      "description": "Family member profiles owned by authenticated user"
+    },
+    "/users/{userId}/health_vitals/{vitalId}": {
+      "schema": { "$ref": "#/entities/VitalRecord" },
+      "description": "Health vitals logs owned by authenticated user"
+    },
+    "/users/{userId}/appointments/{appointmentId}": {
+      "schema": { "$ref": "#/entities/DoctorAppointment" },
+      "description": "Doctor and lab appointments owned by authenticated user"
+    },
+    "/shared_reminders/{reminderId}": {
+      "schema": { "$ref": "#/entities/SharedReminder" },
+      "description": "Caregiver-shared medicine schedules isolated by verified participant email"
+    }
+  }
+}

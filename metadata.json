@@ -1,0 +1,6 @@
+{
+  "name": "Remindly",
+  "description": "Smart medicine and pill reminder app with dosage schedules, meal instructions, pill refill alerts, caregiver sync, full-screen urgent alarms, and real-time notifications.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

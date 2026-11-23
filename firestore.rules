@@ -1,0 +1,345 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function hasVerifiedEmail() {
+      return isSignedIn() &&
+        request.auth.token.email is string &&
+        request.auth.token.email_verified == true;
+    }
+
+    function callerEmail() {
+      return request.auth.token.email.lower();
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidSubtaskItem(item) {
+      return item is map &&
+        item.keys().hasAll(['id', 'title', 'completed']) &&
+        item.keys().hasOnly(['id', 'title', 'completed']) &&
+        item.id is string && item.id.size() >= 1 && item.id.size() <= 64 &&
+        item.title is string && item.title.size() >= 1 && item.title.size() <= 120 &&
+        item.completed is bool;
+    }
+
+    function isValidMedicineFields(data) {
+      return (!('profileId' in data) || (data.profileId is string && data.profileId.size() >= 1 && data.profileId.size() <= 128)) &&
+        (!('profileName' in data) || (data.profileName is string && data.profileName.size() <= 60)) &&
+        (!('dosage' in data) || (data.dosage is string && data.dosage.size() <= 60)) &&
+        (!('medForm' in data) || data.medForm in ['TABLET', 'CAPSULE', 'SYRUP', 'INJECTION', 'DROPS', 'INHALER', 'OTHER']) &&
+        (!('mealInstruction' in data) || data.mealInstruction in ['BEFORE_FOOD', 'AFTER_FOOD', 'WITH_FOOD', 'EMPTY_STOMACH', 'ANYTIME']) &&
+        (!('prescribedBy' in data) || (data.prescribedBy is string && data.prescribedBy.size() <= 80)) &&
+        (!('stockCount' in data) || (data.stockCount is int && data.stockCount >= -1 && data.stockCount <= 10000)) &&
+        (!('dosePerIntake' in data) || (data.dosePerIntake is int && data.dosePerIntake >= 1 && data.dosePerIntake <= 100)) &&
+        (!('refillThreshold' in data) || (data.refillThreshold is int && data.refillThreshold >= 0 && data.refillThreshold <= 500)) &&
+        (!('takenCount' in data) || (data.takenCount is int && data.takenCount >= 0 && data.takenCount <= 100000)) &&
+        (!('skippedCount' in data) || (data.skippedCount is int && data.skippedCount >= 0 && data.skippedCount <= 100000)) &&
+        (!('lastDoseStatus' in data) || data.lastDoseStatus in ['PENDING', 'TAKEN', 'SKIPPED']) &&
+        (!('courseDays' in data) || (data.courseDays is int && data.courseDays >= 0 && data.courseDays <= 3650)) &&
+        (!('courseStartMillis' in data) || (data.courseStartMillis is int && data.courseStartMillis >= 0));
+    }
+
+    function isValidReminderCore(data) {
+      return data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+        data.notes is string && data.notes.size() <= 500 &&
+        data.dueAtMillis is int && data.dueAtMillis > 0 &&
+        data.snoozedUntilMillis is int && data.snoozedUntilMillis >= 0 &&
+        data.leadTimeMinutes is int && data.leadTimeMinutes in [0, 5, 15, 30, 60] &&
+        data.priority in ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] &&
+        data.category in [
+          'DAILY_MEDS', 'VITAMINS', 'HEART_BP', 'DIABETES', 'ANTIBIOTIC', 'EYES_SKIN',
+          'PERSONAL', 'WORK', 'HEALTH', 'FINANCE', 'ERRANDS', 'STUDY'
+        ] &&
+        data.recurrence in [
+          'NONE', 'EVERY_8_HOURS', 'EVERY_12_HOURS', 'DAILY', 'WEEKDAYS', 'WEEKLY', 'MONTHLY', 'YEARLY'
+        ] &&
+        data.completed is bool &&
+        data.pinned is bool &&
+        data.subtasks is list && data.subtasks.size() <= 15 &&
+        (data.subtasks.size() == 0 || isValidSubtaskItem(data.subtasks[0])) &&
+        data.completedAtMillis is int && data.completedAtMillis >= 0 &&
+        data.createdAt is timestamp && data.createdAt <= request.time &&
+        data.updatedAt is timestamp && data.updatedAt <= request.time &&
+        isValidMedicineFields(data);
+    }
+
+    function isValidReminder(data, userId) {
+      return data.userId is string && data.userId == userId &&
+        isValidReminderCore(data) &&
+        (!('urgentAlarm' in data) || data.urgentAlarm is bool) &&
+        (!('locationLabel' in data) || (data.locationLabel is string && data.locationLabel.size() <= 120)) &&
+        (!('latitude' in data) || (data.latitude is number && data.latitude >= -90.0 && data.latitude <= 90.0)) &&
+        (!('longitude' in data) || (data.longitude is number && data.longitude >= -180.0 && data.longitude <= 180.0)) &&
+        (!('radiusMeters' in data) || (data.radiusMeters is int && data.radiusMeters >= 50 && data.radiusMeters <= 5000)) &&
+        (!('locationTriggerEnabled' in data) || data.locationTriggerEnabled is bool);
+    }
+
+    function isValidSharedReminder(data) {
+      return data.ownerId is string && data.ownerId.size() >= 1 && data.ownerId.size() <= 128 &&
+        data.ownerEmail is string && data.ownerEmail.size() >= 3 && data.ownerEmail.size() <= 160 &&
+        data.participantEmails is list &&
+        data.participantEmails.size() >= 1 && data.participantEmails.size() <= 10 &&
+        data.participantEmails[0] is string &&
+        data.ownerEmail in data.participantEmails &&
+        isValidReminderCore(data);
+    }
+
+    function isSharedParticipant(data) {
+      return hasVerifiedEmail() && (callerEmail() in data.participantEmails);
+    }
+
+    function isValidFamilyProfile(data, userId) {
+      return data.userId is string && data.userId == userId &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 60 &&
+        data.relation is string && data.relation.size() >= 1 && data.relation.size() <= 40 &&
+        (!('doctorName' in data) || (data.doctorName is string && data.doctorName.size() <= 80)) &&
+        (!('doctorPhone' in data) || (data.doctorPhone is string && data.doctorPhone.size() <= 30)) &&
+        (!('emergencyPhone' in data) || (data.emergencyPhone is string && data.emergencyPhone.size() <= 30)) &&
+        data.createdAt is timestamp && data.createdAt <= request.time &&
+        data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidVitalRecord(data, userId) {
+      return data.userId is string && data.userId == userId &&
+        data.profileId is string && data.profileId.size() >= 1 && data.profileId.size() <= 128 &&
+        data.type in ['BP', 'SUGAR_FASTING', 'SUGAR_PP', 'SPO2', 'TEMPERATURE', 'WEIGHT'] &&
+        data.valuePrimary is number && data.valuePrimary >= 0.0 && data.valuePrimary <= 1000.0 &&
+        data.valueSecondary is number && data.valueSecondary >= 0.0 && data.valueSecondary <= 1000.0 &&
+        data.unit is string && data.unit.size() >= 1 && data.unit.size() <= 20 &&
+        (!('notes' in data) || (data.notes is string && data.notes.size() <= 300)) &&
+        data.recordedAtMillis is int && data.recordedAtMillis > 0 &&
+        data.createdAt is timestamp && data.createdAt <= request.time &&
+        data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidAppointment(data, userId) {
+      return data.userId is string && data.userId == userId &&
+        data.profileId is string && data.profileId.size() >= 1 && data.profileId.size() <= 128 &&
+        data.doctorName is string && data.doctorName.size() >= 1 && data.doctorName.size() <= 100 &&
+        (!('specialty' in data) || (data.specialty is string && data.specialty.size() <= 80)) &&
+        (!('clinicName' in data) || (data.clinicName is string && data.clinicName.size() <= 100)) &&
+        (!('clinicPhone' in data) || (data.clinicPhone is string && data.clinicPhone.size() <= 30)) &&
+        data.appointmentAtMillis is int && data.appointmentAtMillis > 0 &&
+        (!('notes' in data) || (data.notes is string && data.notes.size() <= 400)) &&
+        data.completed is bool &&
+        data.createdAt is timestamp && data.createdAt <= request.time &&
+        data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    match /users/{userId}/reminders/{reminderId} {
+      allow get: if isOwner(userId) && isValidId(reminderId);
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+        isValidId(reminderId) &&
+        incoming().keys().hasAll([
+          'userId', 'title', 'notes', 'dueAtMillis', 'snoozedUntilMillis',
+          'leadTimeMinutes', 'priority', 'category', 'recurrence',
+          'completed', 'pinned', 'subtasks', 'completedAtMillis',
+          'createdAt', 'updatedAt'
+        ]) &&
+        incoming().keys().hasOnly([
+          'userId', 'profileId', 'profileName',
+          'title', 'notes', 'dueAtMillis', 'snoozedUntilMillis',
+          'leadTimeMinutes', 'priority', 'category', 'recurrence',
+          'completed', 'pinned', 'subtasks', 'completedAtMillis',
+          'urgentAlarm', 'locationLabel', 'latitude', 'longitude',
+          'radiusMeters', 'locationTriggerEnabled',
+          'dosage', 'medForm', 'mealInstruction', 'prescribedBy',
+          'stockCount', 'dosePerIntake', 'refillThreshold',
+          'takenCount', 'skippedCount', 'lastDoseStatus',
+          'courseDays', 'courseStartMillis',
+          'createdAt', 'updatedAt'
+        ]) &&
+        isValidReminder(incoming(), userId);
+
+      allow update: if isOwner(userId) &&
+        isValidId(reminderId) &&
+        isValidReminder(incoming(), userId) &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        (
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'completed', 'completedAtMillis', 'dueAtMillis', 'snoozedUntilMillis',
+            'stockCount', 'takenCount', 'skippedCount', 'lastDoseStatus', 'updatedAt'
+          ]) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['stockCount', 'updatedAt']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['pinned', 'updatedAt']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['dueAtMillis', 'snoozedUntilMillis', 'updatedAt']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['subtasks', 'updatedAt']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'profileId', 'profileName',
+            'title', 'notes', 'dueAtMillis', 'snoozedUntilMillis',
+            'leadTimeMinutes', 'priority', 'category', 'recurrence',
+            'completed', 'pinned', 'subtasks', 'completedAtMillis',
+            'urgentAlarm', 'locationLabel', 'latitude', 'longitude',
+            'radiusMeters', 'locationTriggerEnabled',
+            'dosage', 'medForm', 'mealInstruction', 'prescribedBy',
+            'stockCount', 'dosePerIntake', 'refillThreshold',
+            'takenCount', 'skippedCount', 'lastDoseStatus',
+            'courseDays', 'courseStartMillis',
+            'updatedAt'
+          ])
+        );
+
+      allow delete: if isOwner(userId) && isValidId(reminderId);
+    }
+
+    match /users/{userId}/family_profiles/{profileId} {
+      allow get: if isOwner(userId) && isValidId(profileId);
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+        isValidId(profileId) &&
+        incoming().keys().hasAll(['userId', 'name', 'relation', 'createdAt', 'updatedAt']) &&
+        incoming().keys().hasOnly([
+          'userId', 'name', 'relation', 'doctorName', 'doctorPhone', 'emergencyPhone',
+          'createdAt', 'updatedAt'
+        ]) &&
+        isValidFamilyProfile(incoming(), userId);
+
+      allow update: if isOwner(userId) &&
+        isValidId(profileId) &&
+        isValidFamilyProfile(incoming(), userId) &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'name', 'relation', 'doctorName', 'doctorPhone', 'emergencyPhone', 'updatedAt'
+        ]);
+
+      allow delete: if isOwner(userId) && isValidId(profileId);
+    }
+
+    match /users/{userId}/health_vitals/{vitalId} {
+      allow get: if isOwner(userId) && isValidId(vitalId);
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+        isValidId(vitalId) &&
+        incoming().keys().hasAll([
+          'userId', 'profileId', 'type', 'valuePrimary', 'valueSecondary', 'unit',
+          'recordedAtMillis', 'createdAt', 'updatedAt'
+        ]) &&
+        incoming().keys().hasOnly([
+          'userId', 'profileId', 'type', 'valuePrimary', 'valueSecondary', 'unit',
+          'notes', 'recordedAtMillis', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidVitalRecord(incoming(), userId);
+
+      allow update: if isOwner(userId) &&
+        isValidId(vitalId) &&
+        isValidVitalRecord(incoming(), userId) &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt;
+
+      allow delete: if isOwner(userId) && isValidId(vitalId);
+    }
+
+    match /users/{userId}/appointments/{appointmentId} {
+      allow get: if isOwner(userId) && isValidId(appointmentId);
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+        isValidId(appointmentId) &&
+        incoming().keys().hasAll([
+          'userId', 'profileId', 'doctorName', 'appointmentAtMillis', 'completed',
+          'createdAt', 'updatedAt'
+        ]) &&
+        incoming().keys().hasOnly([
+          'userId', 'profileId', 'doctorName', 'specialty', 'clinicName', 'clinicPhone',
+          'appointmentAtMillis', 'notes', 'completed', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidAppointment(incoming(), userId);
+
+      allow update: if isOwner(userId) &&
+        isValidId(appointmentId) &&
+        isValidAppointment(incoming(), userId) &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'profileId', 'doctorName', 'specialty', 'clinicName', 'clinicPhone',
+          'appointmentAtMillis', 'notes', 'completed', 'updatedAt'
+        ]);
+
+      allow delete: if isOwner(userId) && isValidId(appointmentId);
+    }
+
+    match /shared_reminders/{reminderId} {
+      allow get: if isValidId(reminderId) && isSharedParticipant(existing());
+      allow list: if hasVerifiedEmail() && (callerEmail() in existing().participantEmails);
+
+      allow create: if hasVerifiedEmail() &&
+        isValidId(reminderId) &&
+        incoming().ownerId == request.auth.uid &&
+        incoming().ownerEmail == callerEmail() &&
+        incoming().keys().hasAll([
+          'ownerId', 'ownerEmail', 'participantEmails',
+          'title', 'notes', 'dueAtMillis', 'snoozedUntilMillis',
+          'leadTimeMinutes', 'priority', 'category', 'recurrence',
+          'completed', 'pinned', 'subtasks', 'completedAtMillis',
+          'createdAt', 'updatedAt'
+        ]) &&
+        incoming().keys().hasOnly([
+          'ownerId', 'ownerEmail', 'participantEmails',
+          'title', 'notes', 'dueAtMillis', 'snoozedUntilMillis',
+          'leadTimeMinutes', 'priority', 'category', 'recurrence',
+          'completed', 'pinned', 'subtasks', 'completedAtMillis',
+          'dosage', 'medForm', 'mealInstruction', 'prescribedBy',
+          'stockCount', 'dosePerIntake', 'refillThreshold',
+          'takenCount', 'skippedCount', 'lastDoseStatus',
+          'createdAt', 'updatedAt'
+        ]) &&
+        isValidSharedReminder(incoming());
+
+      allow update: if isValidId(reminderId) &&
+        isSharedParticipant(existing()) &&
+        isValidSharedReminder(incoming()) &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().ownerEmail == existing().ownerEmail &&
+        incoming().createdAt == existing().createdAt &&
+        (
+          (
+            existing().ownerId == request.auth.uid &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'participantEmails', 'title', 'notes', 'dueAtMillis', 'snoozedUntilMillis',
+              'leadTimeMinutes', 'priority', 'category', 'recurrence',
+              'completed', 'pinned', 'subtasks', 'completedAtMillis',
+              'dosage', 'medForm', 'mealInstruction', 'prescribedBy',
+              'stockCount', 'dosePerIntake', 'refillThreshold',
+              'takenCount', 'skippedCount', 'lastDoseStatus',
+              'updatedAt'
+            ])
+          ) ||
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'completed', 'completedAtMillis', 'dueAtMillis', 'snoozedUntilMillis',
+            'stockCount', 'takenCount', 'skippedCount', 'lastDoseStatus', 'subtasks', 'updatedAt'
+          ])
+        );
+
+      allow delete: if isSignedIn() && isValidId(reminderId) && existing().ownerId == request.auth.uid;
+    }
+  }
+}
